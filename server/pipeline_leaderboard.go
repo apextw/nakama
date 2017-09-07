@@ -42,7 +42,7 @@ type leaderboardRecordListCursor struct {
 	Id        []byte
 }
 
-func (p *pipeline) leaderboardsList(logger *zap.Logger, session *session, envelope *Envelope) {
+func (p *pipeline) leaderboardsList(logger *zap.Logger, session session, envelope *Envelope) {
 	incoming := envelope.GetLeaderboardsList()
 
 	limit := incoming.Limit
@@ -149,7 +149,7 @@ func (p *pipeline) leaderboardsList(logger *zap.Logger, session *session, envelo
 	}}})
 }
 
-func (p *pipeline) leaderboardRecordWrite(logger *zap.Logger, session *session, envelope *Envelope) {
+func (p *pipeline) leaderboardRecordWrite(logger *zap.Logger, session session, envelope *Envelope) {
 	e := envelope.GetLeaderboardRecordsWrite()
 
 	if len(e.Records) == 0 {
@@ -240,8 +240,8 @@ func (p *pipeline) leaderboardRecordWrite(logger *zap.Logger, session *session, 
 		return
 	}
 
-	handle := session.handle.Load()
-	params := []interface{}{uuid.NewV4().Bytes(), incoming.LeaderboardId, session.userID.Bytes(), handle, session.lang}
+	handle := session.Handle()
+	params := []interface{}{uuid.NewV4().Bytes(), incoming.LeaderboardId, session.UserID().Bytes(), handle, session.Lang()}
 	if incoming.Location != "" {
 		params = append(params, incoming.Location)
 	} else {
@@ -294,7 +294,7 @@ func (p *pipeline) leaderboardRecordWrite(logger *zap.Logger, session *session, 
 		AND expires_at = $2
 		AND owner_id = $3`
 	logger.Debug("Leaderboard record read", zap.String("query", query))
-	err = p.db.QueryRow(query, incoming.LeaderboardId, expiresAt, session.userID.Bytes()).
+	err = p.db.QueryRow(query, incoming.LeaderboardId, expiresAt, session.UserID().Bytes()).
 		Scan(&location, &timezone, &rankValue, &score, &numScore, &metadata, &rankedAt, &bannedAt)
 	if err != nil {
 		logger.Error("Could not execute leaderboard record read query", zap.Error(err))
@@ -307,9 +307,9 @@ func (p *pipeline) leaderboardRecordWrite(logger *zap.Logger, session *session, 
 			Records: []*LeaderboardRecord{
 				&LeaderboardRecord{
 					LeaderboardId: incoming.LeaderboardId,
-					OwnerId:       session.userID.Bytes(),
+					OwnerId:       session.UserID().Bytes(),
 					Handle:        handle,
-					Lang:          session.lang,
+					Lang:          session.Lang(),
 					Location:      location.String,
 					Timezone:      timezone.String,
 					Rank:          rankValue,
@@ -326,7 +326,7 @@ func (p *pipeline) leaderboardRecordWrite(logger *zap.Logger, session *session, 
 	}})
 }
 
-func (p *pipeline) leaderboardRecordsFetch(logger *zap.Logger, session *session, envelope *Envelope) {
+func (p *pipeline) leaderboardRecordsFetch(logger *zap.Logger, session session, envelope *Envelope) {
 	incoming := envelope.GetLeaderboardRecordsFetch()
 	leaderboardIds := incoming.LeaderboardIds
 	if len(leaderboardIds) == 0 {
@@ -355,7 +355,7 @@ func (p *pipeline) leaderboardRecordsFetch(logger *zap.Logger, session *session,
 	// TODO special handling of banned records?
 
 	statements := []string{}
-	params := []interface{}{session.userID.Bytes()}
+	params := []interface{}{session.UserID().Bytes()}
 	for _, leaderboardId := range leaderboardIds {
 		params = append(params, leaderboardId)
 		statements = append(statements, "$"+strconv.Itoa(len(params)))
@@ -453,7 +453,7 @@ func (p *pipeline) leaderboardRecordsFetch(logger *zap.Logger, session *session,
 	}}})
 }
 
-func (p *pipeline) leaderboardRecordsList(logger *zap.Logger, session *session, envelope *Envelope) {
+func (p *pipeline) leaderboardRecordsList(logger *zap.Logger, session session, envelope *Envelope) {
 	incoming := envelope.GetLeaderboardRecordsList()
 
 	if len(incoming.LeaderboardId) == 0 {
@@ -656,7 +656,7 @@ func (p *pipeline) leaderboardRecordsList(logger *zap.Logger, session *session, 
 	p.normalizeAndSendLeaderboardRecords(logger, session, envelope, leaderboardRecords, outgoingCursor)
 }
 
-func (p *pipeline) loadLeaderboardRecordsHaystack(logger *zap.Logger, session *session, envelope *Envelope, leaderboardId, findOwnerId []byte, currentExpiresAt, limit, sortOrder int64, query string, params []interface{}) {
+func (p *pipeline) loadLeaderboardRecordsHaystack(logger *zap.Logger, session session, envelope *Envelope, leaderboardId, findOwnerId []byte, currentExpiresAt, limit, sortOrder int64, query string, params []interface{}) {
 	// Find the owner's record.
 	var id []byte
 	var score int64
@@ -837,7 +837,7 @@ func (p *pipeline) loadLeaderboardRecordsHaystack(logger *zap.Logger, session *s
 	p.normalizeAndSendLeaderboardRecords(logger, session, envelope, leaderboardRecords, outgoingCursor)
 }
 
-func (p *pipeline) normalizeAndSendLeaderboardRecords(logger *zap.Logger, session *session, envelope *Envelope, records []*LeaderboardRecord, cursor []byte) {
+func (p *pipeline) normalizeAndSendLeaderboardRecords(logger *zap.Logger, session session, envelope *Envelope, records []*LeaderboardRecord, cursor []byte) {
 	var bestRank int64
 	for _, record := range records {
 		if record.Rank != 0 && record.Rank < bestRank {
