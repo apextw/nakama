@@ -4,6 +4,8 @@ All notable changes to this project are documented below.
 The format is based on [keep a changelog](http://keepachangelog.com/) and this project uses [semantic versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- Log a more informative error message when social providers are unreachable or return errors.
 
 ## [1.0.1] - 2017-08-05
 ### Added
